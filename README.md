@@ -3,6 +3,10 @@
 Python implementation of SC_SI (Subspace Clustering with Scalable and Iterative Algorithm).
 SC_SI solves multiple R-PCA (Robust PCA) problem to clustering.
 
+The algorithm is proposed at my master thesis
+
+`Scalable Iterative Algorithm for Robust Subspace Clustering: Convergence and Initialization`
+
 You can check full paper in the link: http://library.kaist.ac.kr/mobile/book/view.do?bibCtrlNo=649637
 
 ## Usage
