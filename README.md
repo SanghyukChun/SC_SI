@@ -11,7 +11,7 @@ You can check full paper in the link: http://library.kaist.ac.kr/mobile/book/vie
 
 ## Usage
 
-Almost same as sci-kit learn K-means [link](http://scikit-learn.org/stable/modules/generated/sklearn.cluster.KMeans.html)
+It is almost same as scikit-learn K-means [link](http://scikit-learn.org/stable/modules/generated/sklearn.cluster.KMeans.html)
 ```
 import numpy as np
 from sc_si.clustering.sc_si import SC_SI
