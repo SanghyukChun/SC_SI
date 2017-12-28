@@ -1,0 +1,4 @@
+.ropeproject/
+*.pyc
+*.tar.gz
+mnist/
