@@ -46,11 +46,20 @@ def __single_iteration__(chunks):
     return ret_centers, ret_subspaces
 
 
-def _compute_norm(chunks):
+def _compute_norm(chunks, max_n=100000):
+    def compute_norm(X, U):
+        X = X - (X.dot(V.T)).dot(U)
+        return np.linalg.norm(X, axis=1)
     dist = {}
     for idx, Y, V in chunks:
-        Y = Y - (Y.dot(V.T)).dot(V)
-        dist[idx] = np.linalg.norm(Y, axis=1)
+        n_data = Y.shape[0]
+        if n_data > max_n:
+            _dist = dist.setdefault(idx, [])
+            for i in range(int(n_data / max_n) + 1):
+                _Y = Y[max_n * i: max_n * (i + 1)]
+                _dist.extend(compute_norm(_Y, V))
+        else:
+            dist[idx] = compute_norm(Y, V)
     return dist
 
 
