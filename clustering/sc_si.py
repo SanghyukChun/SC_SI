@@ -149,15 +149,25 @@ class SC_SI(object):
     def _compute_obj(self, X, centers, subspaces):
         n_samples, n_features = X.shape
         n_jobs = min(self.n_jobs, self.n_clusters)
-        chunks = {}
-        for idx in range(self.n_clusters):
-            Y = X - centers[idx]
-            V = subspaces[idx]
-            _chunks = idx, Y, V
-            chunks.setdefault(idx % n_jobs, []).append(_chunks)
         if n_jobs == 1:
-            rets = [_compute_norm(chunks.values()[0])]
+            rets = {}
+            for idx in range(self.n_clusters):
+                Y = X - centers[idx]
+                V = subspaces[idx]
+                _chunks = idx, Y, V
+                rets[idx] = _compute_norm([_chunks])[idx]
+            rets = [rets]
         else:
+            chunks = {}
+            '''
+            WARNING: for large datasets, load full chunks on memory
+            may cause OOM error
+            '''
+            for idx in range(self.n_clusters):
+                Y = X - centers[idx]
+                V = subspaces[idx]
+                _chunks = idx, Y, V
+                chunks.setdefault(idx % n_jobs, []).append(_chunks)
             try:
                 pool = multiprocessing.Pool(n_jobs)
                 rets = pool.map(_compute_norm, chunks.values())
