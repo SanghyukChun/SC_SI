@@ -7,7 +7,9 @@ The algorithm is proposed at my master thesis
 
 `Scalable Iterative Algorithm for Robust Subspace Clustering: Convergence and Initialization`
 
-You can check full paper in the link: http://library.kaist.ac.kr/mobile/book/view.do?bibCtrlNo=649637
+You can check full paper in the link:
+- https://sanghyukchun.github.io/home/media/papers/chun2016scsi.pdf
+- http://library.kaist.ac.kr/mobile/book/view.do?bibCtrlNo=649637
 
 ## Usage
 
@@ -34,7 +36,6 @@ labels_unseen = model.predict(X_unseen)
 
 1. alpha handles 'robustness' of the objective function. The objective function is more robust with less alpha.
 2. Use alpha=1.0. Theoretically alpha can be any number between (0, 2] but practically, I recommend to choose alpha as 1
-3. Use default initialization named SC_IN if size of dataset is not too large. Otherwise, use 'random' initialization with large n_init.
-  - Or, sampling datasets to initialization
+3. Use default initialization named SC_IN if size of dataset is not too large. Otherwise, use 'random' initialization with large n_init. Or, sampling datasets to initialization
 4. Use default svd_algorithm (subspace iteration). It is much faster and use less memory than exact SVD.
 5. For datasets with less outliers, use large beta (e.g. 10) otherwise, set beta = alpha
