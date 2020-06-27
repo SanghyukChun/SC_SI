@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import os
 import gzip
-import urllib2
+from urllib.request import urlopen
 import numpy as np
 
 
@@ -29,14 +29,14 @@ class MNIST:
             image_fname = os.path.join(mnist_dir, self.images[phase])
             label_fname = os.path.join(mnist_dir, self.labels[phase])
             if not os.path.exists(image_fname):
-                print 'download image from', self.url % self.images[phase]
-                response = urllib2.urlopen(self.url % self.images[phase])
-                open(image_fname + '.tmp', 'w').write(response.read())
+                print('download image from', self.url % self.images[phase])
+                response = urlopen(self.url % self.images[phase])
+                open(image_fname + '.tmp', 'wb').write(response.read())
                 os.rename(image_fname + '.tmp', image_fname)
 
-                print 'download label from', self.url % self.labels[phase]
-                response = urllib2.urlopen(self.url % self.labels[phase])
-                open(label_fname + '.tmp', 'w').write(response.read())
+                print('download label from', self.url % self.labels[phase])
+                response = urlopen(self.url % self.labels[phase])
+                open(label_fname + '.tmp', 'wb').write(response.read())
                 os.rename(label_fname + '.tmp', label_fname)
 
     def load(self, phase, nrz=False):

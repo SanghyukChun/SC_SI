@@ -1,18 +1,19 @@
 # -*- coding: utf-8 -*-
+import pickle
 from collections import Counter
 
 import numpy as np
 from sklearn import metrics
-from sklearn.cluster import KMeans
+from sklearn.cluster import KMeans, MiniBatchKMeans
 from sklearn.decomposition import PCA
 try:
     import matplotlib.pyplot as plt
     from mpl_toolkits.mplot3d import Axes3D
 except ImportError:
-    print 'failed to load matplotlib'
+    print('failed to load matplotlib')
 
 from mnist import MNIST
-from clustering.sc_si import SC_SI
+from clustering.sc_si import SC_SI, MiniBatchSC_SI
 
 
 class Test:
@@ -59,10 +60,12 @@ class Test:
     def eval_cluster(self, pred, true):
         '''http://scikit-learn.org/stable/modules/clustering.html#clustering
         '''
-        print 'homogeneity score', metrics.homogeneity_score(pred, true)
-        print 'completeness score', metrics.completeness_score(pred, true)
-        print 'v measure score', metrics.v_measure_score(pred, true)
-        print 'fowlkes mallows score', metrics.fowlkes_mallows_score(pred, true)
+        print('adjusted rand score', metrics.adjusted_rand_score(pred, true))
+        print('adjusted mutual information', metrics.adjusted_mutual_info_score(pred, true))
+        print('homogeneity score', metrics.homogeneity_score(pred, true))
+        print('completeness score', metrics.completeness_score(pred, true))
+        print('v measure score', metrics.v_measure_score(pred, true))
+        print('fowlkes mallows score', metrics.fowlkes_mallows_score(pred, true))
 
     def vis_cluster(self, X, names, models, preds, sample=2000):
         if X.shape[1] > 3:
@@ -92,27 +95,44 @@ class Test:
         model = SC_SI(n_clusters=10, n_components=20, verbose=True, n_init=3,
                       beta=10)
         pred = model.fit_predict(X)
-        print 'sc si'
+        print('sc si')
         self.eval_cluster(pred, true)
-        print Counter(pred)
+        print(Counter(pred))
+        with open('scsi.pkl', 'wb') as fout:
+            pickle.dump(model, fout)
+
+        model = MiniBatchSC_SI(n_clusters=10, n_components=20, verbose=True, n_init=3,
+                               beta=10, batch_size=1024)
+        pred = model.fit_predict(X)
+        print('sc si mini batch')
+        self.eval_cluster(pred, true)
+        print(Counter(pred))
+        with open('scsi_minibatch.pkl', 'wb') as fout:
+            pickle.dump(model, fout)
 
         model = KMeans(n_clusters=10, n_init=3)
         pred = model.fit_predict(X)
-        print 'kmeans'
+        print('kmeans')
         self.eval_cluster(pred, true)
-        print Counter(pred)
+        print(Counter(pred))
+
+        model = MiniBatchKMeans(n_clusters=10, n_init=3)
+        pred = model.fit_predict(X)
+        print('kmeans')
+        self.eval_cluster(pred, true)
+        print(Counter(pred))
 
     def test(self, n=10000, d=120, r=10, k=3):
         X, true, centers, spaces = self.make_random_dataset(n, d, r, k)
 
         model = SC_SI(n_clusters=k, n_components=r, verbose=True, n_init=3)
         pred = model.fit_predict(X)
-        print 'sc si'
+        print('sc si')
         self.eval_cluster(pred, true)
 
         model = KMeans(n_clusters=k, n_init=3)
         pred = model.fit_predict(X)
-        print 'kmeans'
+        print('kmeans')
         self.eval_cluster(pred, true)
 
     def test_3d_dataset(self, n=10000, verbose=False):
@@ -120,30 +140,57 @@ class Test:
         X, true, centers, spaces = self.make_3d_dataset(n, d, r, k)
         model_sc_si = SC_SI(n_clusters=k, n_components=r, verbose=verbose, n_init=10)
         pred_sc_si = model_sc_si.fit_predict(X)
-        print '[Benchmark Test] SC_SI (SC_IN):'
+        print('[Benchmark Test] SC_SI (SC_IN):')
         self.eval_cluster(pred_sc_si, true)
-        print ''
+        print('')
 
         model = SC_SI(n_clusters=k, n_components=r, verbose=verbose, init='random', n_init=10)
         pred = model.fit_predict(X)
-        print '[Benchmark Test] SC_SI (Random Init):'
+        print('[Benchmark Test] SC_SI (Random Init):')
         self.eval_cluster(pred, true)
-        print ''
+        print('')
+
+        # batch_size = 100
+        batch_size = 1000
+        # batch_size = 2 * n
+        model_batch_sc_si = MiniBatchSC_SI(n_clusters=k, n_components=r, verbose=verbose, n_init=10, batch_size=batch_size)
+        # model_batch_sc_si = MiniBatchSC_SI(n_clusters=k, n_components=r, verbose=True, n_init=10, batch_size=batch_size)
+        pred_batch_sc_si = model_batch_sc_si.fit_predict(X)
+        print('[Benchmark Test] MiniBatch SC_SI (SC-SI):')
+        self.eval_cluster(pred_batch_sc_si, true)
+        print('')
+
+        model_batch_k = MiniBatchKMeans(n_clusters=k, batch_size=batch_size)
+        pred_batch_k = model_batch_k.fit_predict(X)
+        print('[Benchmark Test] MiniBatch K-means:')
+        self.eval_cluster(pred_batch_k, true)
+        print('')
 
         model = KMeans(n_clusters=k)
         pred = model.fit_predict(X)
-        print '[Benchmark Test] K-means:'
+        print('[Benchmark Test] K-means:')
         self.eval_cluster(pred, true)
 
-        self.vis_cluster(X, ['SC-SI', 'K-means'],
-                         [model_sc_si, model],
-                         [pred_sc_si, pred])
+        self.vis_cluster(X, ['SC-SI', 'MiniBatch SC-SI', 'K-means', 'MiniBatch K-means'],
+                         [model_sc_si, model_batch_sc_si, model, model_batch_k],
+                         [pred_sc_si, pred_batch_sc_si, pred, pred_batch_k])
+
+
+'''
+import tqdm
+for j in tqdm.tqdm(range(10)):
+    os.makedirs('./vis/cluster_{}'.format(j), exist_ok=True)
+    new_X = d.subspaces[j].T.dot(d.subspaces[j]).dot((X - d.centers[j]).T).T + d.centers[j]
+    for i in tqdm.tqdm(range(len(X))):
+        Image.fromarray(np.stack([new_X[i, :].reshape((28, 28)), X[i, :].reshape((28, 28))]).reshape((56, 28))).convert('RGB').
+save('./vis/cluster_{}/{}.png'.format(j, i))
+'''
 
 
 if __name__ == '__main__':
     try:
         import fire
     except ImportError:
-        print 'Failed to import fire'
+        print('Failed to import fire')
         exit(-1)
     fire.Fire(Test)

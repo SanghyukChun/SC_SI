@@ -5,7 +5,7 @@ import multiprocessing
 import numpy as np
 from scipy.sparse.linalg import svds
 
-from _init_methods import SC_IN, _findnnspace
+from ._init_methods import SC_IN, _findnnspace
 
 
 def mysvds(X, U, k, n_iter):
@@ -131,7 +131,7 @@ class SC_SI(object):
         try:
             pool = multiprocessing.Pool(n_jobs)
             rets = pool.map(__single_iteration__, chunks.values())
-        except:
+        except Exception:
             pool.terminate()
             raise
         pool.close()
@@ -139,9 +139,9 @@ class SC_SI(object):
         centers = np.zeros((self.n_clusters, n_features))
         subspaces = np.zeros((self.n_clusters, self.n_components, n_features))
         for _centers, _subspaces in rets:
-            for cluster_idx, _center in _centers.iteritems():
+            for cluster_idx, _center in _centers.items():
                 centers[cluster_idx] = _center
-            for cluster_idx, _subspace in _subspaces.iteritems():
+            for cluster_idx, _subspace in _subspaces.items():
                 subspaces[cluster_idx] = _subspace
         obj, labels, D = self._compute_obj(X, centers, subspaces)
         return centers, subspaces, labels, D, obj
@@ -171,14 +171,14 @@ class SC_SI(object):
             try:
                 pool = multiprocessing.Pool(n_jobs)
                 rets = pool.map(_compute_norm, chunks.values())
-            except:
+            except Exception:
                 pool.terminate()
                 raise
             pool.close()
             pool.join()
         dist = np.zeros((self.n_clusters, n_samples))
         for ret in rets:
-            for idx, _dist in ret.iteritems():
+            for idx, _dist in ret.items():
                 dist[idx] = _dist
         # prevent nan error
         dist += 1e-100 * np.ones((self.n_clusters, n_samples))
@@ -228,7 +228,7 @@ class SC_SI(object):
         labels, D = None, None
         for n_iter in range(self.n_init):
             if self.verbose:
-                print '[SC_SI] Initialization %s / %s' % (n_iter + 1, self.n_init)
+                print('[SC_SI] Initialization %s / %s' % (n_iter + 1, self.n_init))
             _centers, _subspaces = self._init_clusters(X, sc_in_N0, sc_in_k)
             _obj, _labels, _D = self._compute_obj(X, _centers, _subspaces)
             if _obj < best_obj:
@@ -249,10 +249,10 @@ class SC_SI(object):
         assert subspaces.shape[0] == self.n_clusters
         assert subspaces.shape[1] == self.n_components
         assert len(subspaces.shape) == 3
-        I = np.diag(np.ones((self.n_components)))
+        Iden = np.diag(np.ones((self.n_components)))
         for vv in subspaces:
             for v in subspaces:
-                assert np.sum((I - v.dot(v.T)) ** 2) < 1e-5, 'subspace is not orthogonal, %s' % v.dot(v.T)
+                assert np.sum((Iden - v.dot(v.T)) ** 2) < 1e-5, 'subspace is not orthogonal, %s' % v.dot(v.T)
 
     def predict(self, X):
         _, labels, _ = self._compute_obj(X, self.centers, self.subspaces)
@@ -293,7 +293,7 @@ class SC_SI(object):
                     print('reached to max iteration. Break')
                 converged = True
             if improvement < 0:
-                print 'WARNING: objective function should be MONOTONICALLY decreased!!'
+                print('WARNING: objective function should be MONOTONICALLY decreased!!')
             if np.abs(improvement) < self.tol:
                 if self.verbose:
                     print('improvement is less than %s. Break' % self.tol)
@@ -317,7 +317,7 @@ class SC_SI(object):
 
 class MiniBatchSC_SI(SC_SI):
     def __init__(self, n_clusters=8, n_components=10, init='sc_in', init_space=None, max_iter=100,
-                 verbose=0, compute_labels=True, random_state=None,
+                 batch_size=100, verbose=0, compute_labels=True, random_state=None,
                  svd_algorithm='subspace_iteration', alpha=1.0, n_subspace_iter=1,
                  tol=1e-7, tol2=3, n_jobs=1,
                  beta=None, n_init=3):
@@ -336,16 +336,64 @@ class MiniBatchSC_SI(SC_SI):
                                              n_jobs,
                                              beta,
                                              n_init)
+        self.batch_size = batch_size
 
     def __multi_iteration__(self, X, centers, subspaces, labels, D, w=0.1):
         for cluster_idx in range(self.n_clusters):
             _idx = (labels == cluster_idx)
+            if not np.sum(_idx):
+                continue
             _X = X[_idx]
             _D = D[cluster_idx][_idx]
             _center, _subspace = __single_iteration__(
                 [(cluster_idx, _X, _D, centers, subspaces, self.n_components, {})]
             )
-            centers[cluster_idx] = centers * (1 - w) + _center[cluster_idx] * w
+            centers[cluster_idx] = centers[cluster_idx] * (1 - w) + _center[cluster_idx] * w
             subspaces[cluster_idx] = _subspace[cluster_idx]
         obj, labels, D = self._compute_obj(X, centers, subspaces)
         return centers, subspaces, labels, D, obj
+
+    def _fit(self, X, y=None, sc_in_N0=None, sc_in_k=None):
+        ''' X : array-like matrix, shape=(n_samples, n_features)
+        Training instances to cluster.
+        y : Ignored'''
+        X = np.array(X)
+        assert self.n_components < X.shape[1],\
+            'too large subspace dimension %s, %s' % (self.n_components, X.shape)
+        prev_obj, centers, subspaces, labels, D = self._initialize(X, sc_in_N0, sc_in_k)
+        n_iter, converged = 0, False
+        t = time.time()
+        while(not converged):
+            n_iter += 1
+            N = len(X)
+            shuffled_idx = np.arange(N)
+            np.random.shuffle(shuffled_idx)
+
+            num_batches = N // self.batch_size
+
+            for _iter in range(num_batches):
+                _idx = shuffled_idx[_iter * self.batch_size:(_iter + 1) * self.batch_size]
+                _X = X[_idx]
+                _labels = labels[_idx]
+                _D = D[:, _idx]
+                centers, subspaces, _labels, _D, obj =\
+                    self.__multi_iteration__(_X, centers, subspaces, _labels, _D)
+                # TODO optimal moving avg?
+                # self.__multi_iteration__(_X, centers, subspaces, _labels, _D, w=1)
+                self._check_subspace(subspaces)
+
+                labels[_idx] = _labels
+                D[:, _idx] = _D
+            if self.verbose:
+                print('[SC_SI] %s / %s, obj: %s' %
+                      (n_iter, self.max_iter, obj))
+            if n_iter >= self.max_iter:
+                if self.verbose:
+                    print('reached to max iteration. Break')
+                converged = True
+        if self.verbose:
+            print('[SC_SI] Training Done. takes %s secs' % (time.time() - t))
+        self.centers = centers
+        self.subspaces = subspaces
+        _, labels, _ = self._compute_obj(X, centers, subspaces)
+        return obj, labels
