@@ -14,9 +14,9 @@ You can check full paper in the link:
 ## Usage
 
 It is almost same as scikit-learn K-means [link](http://scikit-learn.org/stable/modules/generated/sklearn.cluster.KMeans.html)
-```
+```python
 import numpy as np
-from sc_si.clustering.sc_si import SC_SI
+from sc_si.clustering.sc_si import SC_SI, MiniBatchSC_SI
 
 n_data = 10000
 dim_data = 500
@@ -24,6 +24,7 @@ X = np.random.random((n_data, dim_data))
 
 n_clusters = 10
 n_components = 20
+# if you have a large dataset, use `MiniBatchSC_SI` instead.
 model = SC_SI(n_clusters=n_clusters, n_components=n_components, alpha=1.0, init='sc_si', n_init=3, max_iter=100, verbose=True)
 labels = model.fit_predict(X)
 
